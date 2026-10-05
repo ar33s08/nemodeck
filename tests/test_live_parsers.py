@@ -97,7 +97,7 @@ def make_adapter(mapping: dict[str, str]) -> LiveAdapter:
 # -- tests -------------------------------------------------------------------
 
 def test_list_parses_real_output():
-    adapter = make_adapter({"nemoclaw list": LIST_TEXT})
+    adapter = make_adapter({"nemoclaw list": LIST_TEXT, "sandbox status": STATUS_JSON})
     sbs = adapter.list_sandboxes()
     assert [s.name for s in sbs] == ["spark-hermes"]
     assert sbs[0].agent == "hermes"
