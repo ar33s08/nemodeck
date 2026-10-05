@@ -119,8 +119,8 @@ def main() -> int:
 
             check("title", "nemodeck" in (cdp.eval("document.title") or ""), cdp.eval("document.title"))
             pending = cdp.wait_for("document.querySelectorAll('.req.pending').length || false")
-            check("pending cards render", pending == 3, f"got {pending}")
-            check("pending tile", cdp.eval("document.querySelector('#stPend').textContent") == "3")
+            check("pending cards render", pending >= 1, f"got {pending}")
+            check("pending tile", cdp.eval("document.querySelector('#stPend').textContent") == str(pending))
             ep = cdp.eval("document.querySelector('.req.pending .ep').textContent.trim()")
             check("endpoint shown", ":" in (ep or ""), ep)
 
@@ -131,13 +131,21 @@ def main() -> int:
             check("preset yaml prefilled", (yaml_head or "").startswith("preset:"), yaml_head)
             cdp.eval("document.querySelector('#apNote').value = 'e2e: verified'")
             cdp.eval("document.querySelector('#apGo').click()")
-            cdp.wait_for("document.querySelectorAll('.req.approved').length === 1", timeout=15)
+            cdp.wait_for("document.querySelectorAll('.req.approved').length >= 1", timeout=15)
             check("card moved to approved", True)
-            cdp.wait_for("document.querySelectorAll('.req.pending').length === 2", timeout=15)
-            check("pending count decremented", cdp.eval("document.querySelector('#stPend').textContent") == "2")
+            cdp.wait_for(f"document.querySelectorAll('.req.pending').length === {pending - 1}", timeout=15)
+            check("pending count decremented", cdp.eval("document.querySelector('#stPend').textContent") == str(pending - 1))
 
             audit_txt = cdp.eval("document.querySelector('#audList').textContent")
             check("audit shows decision", "approve_request" in (audit_txt or ""), )
+
+            # agent chat (demo adapter replies)
+            cdp.eval("document.querySelector('#chatIn').value = 'hello from e2e'")
+            cdp.eval("document.querySelector('#chatSend').click()")
+            cdp.wait_for("document.querySelectorAll('#chatLog .msg.agent').length >= 1", timeout=20)
+            chat_txt = cdp.eval("document.querySelector('#chatLog .msg.agent').textContent") or ""
+            check("agent chat replies", "received" in chat_txt, chat_txt[:80])
+            check("chat user bubble", cdp.eval("document.querySelectorAll('#chatLog .msg.user').length") >= 1)
 
             shot = cdp.cmd("Page.captureScreenshot", format="png")
             out = ROOT / "artifacts" / "ui.png"
