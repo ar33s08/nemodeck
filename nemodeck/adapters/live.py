@@ -46,6 +46,18 @@ def _dig(obj, *names):
     return None
 
 
+def _load_json_with_prefix(text: str):
+    """Some NemoClaw commands print a ✓ banner line before the JSON body."""
+
+    idx = text.find("{")
+    if idx < 0:
+        return None
+    try:
+        return json.loads(text[idx:])
+    except json.JSONDecodeError:
+        return None
+
+
 class LiveAdapter(NemoClawAdapter):
     kind = "live"
 
@@ -83,13 +95,11 @@ class LiveAdapter(NemoClawAdapter):
         for argv in ([self.cli, "list", "--json"], ["openshell", "sandbox", "list", "--json"]):
             res = self.runner.run(argv, timeout=30)
             if res.ok and res.out.strip():
-                try:
-                    data = json.loads(res.out)
+                data = _load_json_with_prefix(res.out)
+                if data is not None:
                     names = self._names_from_json(data)
                     if names:
                         break
-                except json.JSONDecodeError:
-                    pass
         if not names:
             for argv in ([self.cli, "list"], ["openshell", "sandbox", "list"]):
                 res = self.runner.run(argv, timeout=30)
@@ -126,28 +136,35 @@ class LiveAdapter(NemoClawAdapter):
 
     @staticmethod
     def _names_from_text(text: str) -> list[str]:
+        """Parse the real `nemoclaw list` shape:
+
+            Sandboxes:
+              spark-hermes *
+                agent: hermes  model: ...  provider: ...
+
+            * = default sandbox
+        """
+
         names: list[str] = []
         for line in text.splitlines():
-            stripped = line.strip().lstrip("•-* ").strip()
-            if not stripped or stripped.lower().startswith(("name", "sandbox", "usage", "no sandboxes")):
+            stripped = line.strip()
+            if not stripped or stripped.startswith("*") and "=" in stripped:
                 continue
-            token = re.split(r"\s{2,}|\t|\s\|\s", stripped)[0].strip().rstrip(":")
-            if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", token):
-                names.append(token)
-        # de-dup, keep order
+            stripped = stripped.lstrip("-•* ").strip()
+            m = re.match(r"^([A-Za-z0-9][A-Za-z0-9._-]{0,63})(?:\s+\*)?$", stripped)
+            if m:
+                names.append(m.group(1))
         seen: set[str] = set()
         return [n for n in names if not (n in seen or seen.add(n))]
 
     def status(self, name: str) -> SandboxStatus:
-        res = self.runner.run([self.cli, "sandbox", "status", name, "--json"], timeout=60)
+        res = self.runner.run([self.cli, "sandbox", "status", name, "--json"], timeout=90)
         if res.ok and res.out.strip():
-            try:
-                data = json.loads(res.out)
+            data = _load_json_with_prefix(res.out)
+            if data is not None:
                 return self._status_from_json(name, data)
-            except json.JSONDecodeError:
-                pass
         # Fallback: text form
-        res2 = self.runner.run([self.cli, name, "status"], timeout=60)
+        res2 = self.runner.run([self.cli, name, "status"], timeout=90)
         text = res2.out or res2.err
         return self._status_from_text(name, text, raw=res2.out.strip()[:4000])
 
@@ -155,12 +172,26 @@ class LiveAdapter(NemoClawAdapter):
     def _status_from_json(name: str, data: dict) -> SandboxStatus:
         if isinstance(data, dict) and data.get("found") is False:
             return SandboxStatus(name=name, found=False, state="unregistered", raw={"found": False})
-        agent = _dig(data, "agent", "agentType", "runtime") or "unknown"
-        state = _dig(data, "state", "status", "phase") or "unknown"
-        model = _dig(data, "model", "modelId", "servedModel")
-        provider = _dig(data, "provider", "providerName")
-        endpoint = _dig(data, "endpoint", "baseUrl", "inferenceRoute", "route")
-        gpu = _dig(data, "gpu", "gpuProof", "accelerator")
+        health_raw = data.get("inferenceHealth") or {}
+        gpu_proof = data.get("sandboxGpuProof") or {}
+        state = data.get("phase") or _dig(data, "state", "status") or "unknown"
+        agent = data.get("agent") or _dig(data, "agentType", "runtime") or "unknown"
+        model = data.get("model") or _dig(data, "modelId", "servedModel")
+        provider = data.get("provider") or _dig(data, "providerName")
+        endpoint = health_raw.get("endpoint") or _dig(data, "endpoint", "baseUrl", "inferenceRoute")
+        gpu = None
+        if gpu_proof.get("status"):
+            gpu = f"{gpu_proof.get('status')}" + (" (cuda verified)" if gpu_proof.get("cudaVerified") else "")
+        elif data.get("sandboxGpuEnabled"):
+            gpu = "enabled"
+        health = {
+            "ok": bool(health_raw.get("ok")),
+            "detail": health_raw.get("detail"),
+            "subprobes": [
+                {"ok": p.get("ok"), "label": p.get("providerLabel"), "endpoint": p.get("endpoint"), "detail": p.get("detail")}
+                for p in (health_raw.get("subprobes") or [])
+            ],
+        }
         return SandboxStatus(
             name=name,
             found=True,
@@ -169,8 +200,9 @@ class LiveAdapter(NemoClawAdapter):
             model=str(model) if model else None,
             provider=str(provider) if provider else None,
             endpoint=str(endpoint) if endpoint else None,
-            gpu=str(gpu) if gpu else None,
-            raw={"json": data if len(json.dumps(data)) < 8000 else None},
+            gpu=gpu,
+            health=health,
+            raw={"json": data if len(json.dumps(data)) < 12000 else None},
         )
 
     @staticmethod
@@ -201,21 +233,30 @@ class LiveAdapter(NemoClawAdapter):
 
     # -- policy -------------------------------------------------------------
     def policy(self, name: str) -> PolicyInfo:
+        """Parse the real `policy list` shape:
+
+            Policy presets for sandbox 'spark-hermes':
+              ○ brave — Brave Search API access
+              ● brew [user-added] — Homebrew access
+        """
+
         res = self.runner.run([self.cli, name, "policy", "list"], timeout=60)
         text = res.out or res.err
-        presets: list[str] = []
+        applied: list[str] = []
+        available: list[str] = []
         custom: list[str] = []
         for line in text.splitlines():
-            stripped = line.strip().lstrip("•-* ").strip()
-            m = re.match(r"^([a-z0-9][a-z0-9_-]*)\b(.*)$", stripped)
+            m = re.match(r"^\s*([●○])\s+([a-z0-9][a-z0-9_-]*)", line)
             if not m:
                 continue
-            pname = m.group(1)
-            rest = m.group(2).lower()
-            if pname in ("usage", "error", "available", "applied", "policy"):
-                continue
-            (custom if "nemodeck-" in pname else presets if "applied" in rest or "active" in rest else presets).append(pname)
-        return PolicyInfo(sandbox=name, presets=presets, custom_groups=custom, raw=text)
+            pname = m.group(2)
+            if m.group(1) == "●":
+                applied.append(pname)
+                if "nemodeck-" in pname:
+                    custom.append(pname)
+            else:
+                available.append(pname)
+        return PolicyInfo(sandbox=name, presets=applied, custom_groups=custom, baseline=None, raw=text, available=available)
 
     def policy_get(self, name: str) -> CommandResult:
         return self.runner.run([self.cli, name, "policy", "get"], timeout=60)
@@ -247,6 +288,16 @@ class LiveAdapter(NemoClawAdapter):
 
     def exec_in(self, name: str, cmd: list[str]) -> CommandResult:
         return self.runner.run([self.cli, name, "exec", "--", *cmd], timeout=120)
+
+    # -- inference ------------------------------------------------------------
+    def inference_get(self) -> CommandResult:
+        return self.runner.run(["openshell", "inference", "get"], timeout=30)
+
+    def inference_set(self, provider: str, model: str, sandbox: str | None = None) -> CommandResult:
+        argv = [self.cli, "inference", "set", "--provider", provider, "--model", model]
+        if sandbox:
+            argv += ["--sandbox", sandbox]
+        return self.runner.run(argv, timeout=300, env_extra=_MUTATE_ENV)
 
     # -- lifecycle ----------------------------------------------------------
     def op(self, name: str, op: str, **kwargs) -> CommandResult:

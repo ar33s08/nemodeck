@@ -73,6 +73,7 @@ class PolicyInfo:
     custom_groups: list[str] = field(default_factory=list)
     baseline: Optional[str] = None
     raw: str = ""
+    available: list[str] = field(default_factory=list)
 
 
 def dumps(obj: Any) -> dict:

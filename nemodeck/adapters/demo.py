@@ -166,6 +166,7 @@ class DemoAdapter(NemoClawAdapter):
             custom_groups=custom,
             baseline="nemoclaw-blueprint/policies/hermes-sandbox.yaml",
             raw=raw,
+            available=[p for p in _KNOWN_PRESETS if p not in presets],
         )
 
     def add_policy_file(self, name: str, yaml_text: str, label: str) -> CommandResult:
