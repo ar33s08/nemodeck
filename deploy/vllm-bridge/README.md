@@ -42,7 +42,7 @@ Make it survive reboots with a user crontab line (no sudo):
 ## Verify from inside the sandbox
 
 ```bash
-nemohermes <sandbox> exec -- curl -sS -o /dev/null -w '%{http_code}\n' https://inference.local/v1/models
+nemoclaw <sandbox> exec -- curl -sS -o /dev/null -w '%{http_code}\n' https://inference.local/v1/models
 # → 200, and the body lists your model
 ```
 
