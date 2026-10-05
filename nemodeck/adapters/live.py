@@ -14,6 +14,9 @@ from __future__ import annotations
 import json
 import re
 import tempfile
+import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 from .. import discovery
@@ -22,6 +25,8 @@ from ..runner import CommandResult, Runner
 from .base import AdapterError, NemoClawAdapter
 
 _MUTATE_ENV = {"NEMOCLAW_NON_INTERACTIVE": "1", "NEMOCLAW_NO_POLICY_HINT": "1"}
+
+_HERMES_API_PORT = 8642  # host-side forward to the hermes agent's OpenAI-compatible API
 
 _AGENTS = ("hermes", "openclaw", "langchain-deepagents-code", "deepagents")
 
@@ -56,6 +61,18 @@ def _load_json_with_prefix(text: str):
         return json.loads(text[idx:])
     except json.JSONDecodeError:
         return None
+
+
+def _extract_reply(data: dict) -> str:
+    """Pull the assistant text out of an OpenAI-compatible chat response."""
+
+    try:
+        content = data["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise AdapterError(f"unexpected chat response shape: {str(data)[:200]}") from exc
+    if content is None:
+        raise AdapterError("agent returned no content")
+    return content
 
 
 class LiveAdapter(NemoClawAdapter):
@@ -298,6 +315,65 @@ class LiveAdapter(NemoClawAdapter):
         if sandbox:
             argv += ["--sandbox", sandbox]
         return self.runner.run(argv, timeout=300, env_extra=_MUTATE_ENV)
+
+    # -- agent ----------------------------------------------------------------
+    def _gateway_token(self, name: str) -> str:
+        """Cache the sandbox agent's bearer token for 10 minutes."""
+
+        tokens = self.__dict__.setdefault("_tokens", {})
+        now = time.monotonic()
+        cached = tokens.get(name)
+        if cached and cached[1] > now:
+            return cached[0]
+        res = self.runner.run([self.cli, name, "gateway-token", "--quiet"], timeout=30)
+        token = (res.out or "").strip()
+        if not res.ok or not token:
+            raise AdapterError(f"could not read the sandbox agent token: {res.summary()}")
+        tokens[name] = (token, now + 600)
+        return token
+
+    def ask(self, name: str, prompt: str, timeout: float = 300.0) -> str:
+        """One agent turn through the sandbox's OpenAI-compatible endpoint.
+
+        NemoClaw forwards the hermes agent's API to 127.0.0.1:8642 on the host
+        (``openshell … forward service <sandbox> --target-port 8642``); the
+        request itself runs inside the sandbox, so all its policy applies.
+        """
+
+        token = self._gateway_token(name)
+        models = self.__dict__.setdefault("_agent_models", {})
+        payload = json.dumps(
+            {
+                "model": models.get(name, "hermes-agent"),
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 4096,
+            }
+        ).encode("utf-8")
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{_HERMES_API_PORT}/v1/chat/completions",
+            data=payload,
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            method="POST",
+        )
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        try:
+            with opener.open(req, timeout=timeout) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            body = ""
+            try:
+                body = exc.read().decode("utf-8", "replace")[:300]
+            except Exception:
+                pass
+            raise AdapterError(f"agent endpoint HTTP {exc.code}: {body or exc.reason}") from exc
+        except urllib.error.URLError as exc:
+            raise AdapterError(
+                f"agent endpoint unreachable at 127.0.0.1:{_HERMES_API_PORT} — "
+                f"is the sandbox running and its forward healthy? ({exc.reason})"
+            ) from exc
+        except TimeoutError as exc:
+            raise AdapterError(f"agent turn timed out after {int(timeout)}s") from exc
+        return _extract_reply(data)
 
     # -- lifecycle ----------------------------------------------------------
     def op(self, name: str, op: str, **kwargs) -> CommandResult:

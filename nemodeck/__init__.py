@@ -9,4 +9,4 @@ one-click promotion of repeat approvals into durable policy, and lifecycle
 operations — all driven through the real ``nemoclaw``/``openshell`` CLIs.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

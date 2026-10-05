@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from fastapi import Body, Depends, FastAPI, HTTPException, Request
+from fastapi import Body, Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, StreamingResponse
 
 from . import __version__
@@ -60,6 +60,14 @@ def create_app(deck: Deck, token: str | None = None) -> FastAPI:
             index_html = (WEB_DIR / "index.html").read_text(encoding="utf-8")
         return index_html
 
+    @app.get("/manifest.webmanifest")
+    def manifest():
+        return Response((WEB_DIR / "manifest.webmanifest").read_text(encoding="utf-8"), media_type="application/manifest+json")
+
+    @app.get("/icon.svg")
+    def icon():
+        return Response((WEB_DIR / "icon.svg").read_text(encoding="utf-8"), media_type="image/svg+xml")
+
     # -- api ------------------------------------------------------------------
     @app.get("/api/health")
     def health():
@@ -103,6 +111,10 @@ def create_app(deck: Deck, token: str | None = None) -> FastAPI:
     @app.post("/api/requests/{rid}/deny", dependencies=[Depends(require_auth)])
     def deny(rid: str, payload: dict = Body(default={})):
         return deck.deny(rid, note=str(payload.get("note", "")))
+
+    @app.post("/api/sandboxes/{name}/ask", dependencies=[Depends(require_auth)])
+    def ask(name: str, payload: dict = Body(default={})):
+        return deck.ask(name, str(payload.get("prompt", "")))
 
     @app.get("/api/audit", dependencies=[Depends(require_auth)])
     def audit(tail: int = 200):

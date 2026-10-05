@@ -209,6 +209,24 @@ class Deck:
         self.store.save()
         return {"request": self.get_request(rid).to_dict(), "result": {"ok": True, "rc": 0, "output": "denied — endpoint stays blocked"}}
 
+    # -- agent ----------------------------------------------------------------
+    def ask(self, name: str, prompt: str, actor: str = "operator", timeout: float = 300.0) -> dict:
+        """Send one prompt to the sandbox agent; audit the exchange."""
+
+        prompt = (prompt or "").strip()
+        if not prompt:
+            raise DeckError("empty prompt")
+        if len(prompt) > 8000:
+            raise DeckError("prompt too long (8000 char max)")
+        t0 = time.time()
+        reply = self.adapter.ask(name, prompt, timeout=timeout)
+        took_ms = round((time.time() - t0) * 1000)
+        self.audit.append(
+            "agent_ask", actor=actor, sandbox=name,
+            note=prompt[:140], result="ok", reply_chars=len(reply), took_ms=took_ms,
+        )
+        return {"reply": reply, "took_ms": took_ms}
+
     # -- ops / audit ----------------------------------------------------------
     def run_op(self, name: str, op: str, actor: str = "operator", snapshot_name: str | None = None) -> dict:
         kwargs = {"snapshot_name": snapshot_name} if snapshot_name else {}

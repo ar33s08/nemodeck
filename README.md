@@ -1,6 +1,6 @@
 # nemodeck
 
-**The operator console NemoClaw doesn't ship.** Approvals inbox, policy promotion, lifecycle, and an append-only audit trail for [NVIDIA NemoClaw](https://github.com/NVIDIA/NemoClaw) sandboxes — driven entirely through the real `nemoclaw` / `openshell` CLIs.
+**The operator console NemoClaw doesn't ship.** Approvals inbox, policy promotion, agent chat, lifecycle, and an append-only audit trail for [NVIDIA NemoClaw](https://github.com/NVIDIA/NemoClaw) sandboxes — driven entirely through the real `nemoclaw` / `openshell` CLIs.
 
 ![screenshot](docs/screenshot.png)
 
@@ -20,6 +20,7 @@ nemodeck closes the loop: a web approvals inbox with reasons, an fsync'd audit l
 ## What you get
 
 - **Approvals inbox** — every blocked egress request (host, port, requesting binary, method/path, first seen, seen count), with **Approve…** / **Deny…** and a mandatory reason. Approve shows you the *exact* preset YAML (editable) that will be applied — nothing is a bare "yes".
+- **Ask the agent** — a chat panel wired to the sandbox's OpenAI-compatible agent API (the `hermes-agent` model via NemoClaw's forwarded `:8642`). Replies come from the real agent inside the sandbox, so its tools and network policy still apply — blocked actions land straight in the approvals inbox. Works on your phone over the tailnet (installable as a home-screen app).
 - **Least-privilege by construction** — the generated preset scopes host + port + method + path + binary. Unknown binaries are refused until you set the exact path `openshell term` reports.
 - **Audit trail** — append-only JSONL, `fsync` per entry: approve, deny, policy ops, lifecycle ops, with operator notes. Export-friendly, grep-friendly.
 - **Lifecycle deck** — per-sandbox status, logs (streamed), rebuild, recover, snapshots, doctor — outputs stream straight into the UI.
@@ -49,8 +50,11 @@ python -m nemodeck serve --adapter live
 **Share it over a private network (tailnet / VPN) — never the public internet:**
 
 ```bash
-python -m nemodeck serve --adapter live --host 0.0.0.0 --port 8787
-# non-loopback binds force an operator token; it is generated and printed once
+python -m nemodeck serve --adapter live --host "$(tailscale ip -4)" --port 8787
+# non-loopback binds force an operator token (auto-generated and printed once;
+# or pass --token from a file to keep it stable across restarts).
+# Point your phone or laptop at that URL over the tailnet — the console
+# installs to your home screen (web manifest included) and works from anywhere.
 ```
 
 ### Verified live — DGX Spark, real NemoClaw

@@ -1,0 +1,12 @@
+{
+  "name": "nemodeck — NemoClaw operator console",
+  "short_name": "nemodeck",
+  "description": "Approvals, policy, and agent chat for NemoClaw sandboxes.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0c11",
+  "theme_color": "#0a0c11",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

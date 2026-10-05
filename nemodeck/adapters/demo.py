@@ -169,6 +169,22 @@ class DemoAdapter(NemoClawAdapter):
             available=[p for p in _KNOWN_PRESETS if p not in presets],
         )
 
+    # -- agent ----------------------------------------------------------------
+    def ask(self, name: str, prompt: str, timeout: float = 300.0) -> str:
+        self._require(name)
+        self._sleep(0.4)
+        p = prompt.strip()
+        low = p.lower()
+        if any(k in low for k in ("weather", "fetch ", "http", "api.")):
+            return (
+                f"[demo] I reached for “{p[:120]}” and the sandbox egress policy blocked it — "
+                "it's showing in the approvals inbox. Approve the endpoint and I'll retry."
+            )
+        return (
+            f"[demo] agent({name}) received: “{p[:200]}”. In live mode this reply comes from the "
+            "sandbox's real agent through its OpenAI-compatible API — its tools and network policy all apply."
+        )
+
     def add_policy_file(self, name: str, yaml_text: str, label: str) -> CommandResult:
         self._require(name)
         self._sleep(0.15)

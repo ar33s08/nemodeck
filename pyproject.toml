@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nemodeck"
-version = "0.1.0"
+version = "0.2.0"
 description = "Operator console for NVIDIA NemoClaw sandboxes — approvals inbox, policy promotion, lifecycle, audit."
 readme = "README.md"
 requires-python = ">=3.10"

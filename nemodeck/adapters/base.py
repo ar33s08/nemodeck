@@ -66,3 +66,8 @@ class NemoClawAdapter(ABC):
 
     @abstractmethod
     def snapshot_list(self, name: str) -> CommandResult: ...
+
+    # -- agent ----------------------------------------------------------------
+    @abstractmethod
+    def ask(self, name: str, prompt: str, timeout: float = 300.0) -> str:
+        """Send one prompt to the sandbox agent; return its reply text."""
