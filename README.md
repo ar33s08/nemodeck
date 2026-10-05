@@ -53,6 +53,24 @@ python -m nemodeck serve --adapter live --host 0.0.0.0 --port 8787
 # non-loopback binds force an operator token; it is generated and printed once
 ```
 
+### Verified live — DGX Spark, real NemoClaw
+
+Tested end-to-end against `nemoclaw v0.0.124` / OpenShell `0.0.116` on a DGX Spark
+(sandbox `spark-hermes`, agent `hermes`, local Qwen3.8-Flash-Next served by vLLM on :18300):
+
+```text
+discovered   DENIED /usr/bin/curl(181651) -> api.weather.gov:443    (parsed from `nemoclaw <name> logs`)
+approved     "Applied preset: nemodeck-api-weather-gov"             (real `policy add --from-file --yes`)
+policy list  ● nemodeck-api-weather-gov [user-added]
+retry        curl https://api.weather.gov/… → HTTP 200              (was 403, CONNECT tunnel failed)
+audit        approve_request {actor: operator, note, preset, binary, request_id}
+```
+
+If your model server binds only to `127.0.0.1` (common for vLLM), sandbox inference
+cannot reach it through the OpenShell bridge — an OpenShell runtime requirement, not a
+nemodeck one. See [`deploy/vllm-bridge/`](deploy/vllm-bridge/README.md) for a minimal
+relay that listens on the docker-bridge interface only (never LAN or public).
+
 ## How it works
 
 ```
@@ -121,7 +139,7 @@ make test     # pytest — unit, service, API, SSE
 .venv/bin/python tools/make_preview.py  # standalone interactive UI snapshot (no server)
 ```
 
-Layout: `nemodeck/adapters/` (live + demo backends), `nemodeck/service.py` (operator logic), `nemodeck/discovery.py` (blocked-egress log parsing), `nemodeck/runner.py` (safe subprocess), `nemodeck/web/index.html` (the console).
+Layout: `nemodeck/adapters/` (live + demo backends), `nemodeck/service.py` (operator logic), `nemodeck/discovery.py` (blocked-egress log parsing), `nemodeck/runner.py` (safe subprocess), `nemodeck/web/index.html` (the console), `deploy/vllm-bridge/` (host-side relay for loopback-only model servers).
 
 ## Roadmap
 
