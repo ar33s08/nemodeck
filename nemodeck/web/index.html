@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nemodeck — NemoClaw operator console</title>
+<link rel="icon" href="data:,">
+<style>
+:root{
+  --bg:#0a0c11; --panel:#10141c; --panel2:#141927; --line:#1d2534; --line2:#263046;
+  --text:#e8ecf3; --mut:#8a93a5; --dim:#5b6577;
+  --acc:#76b900; --acc2:#8fd41a; --warn:#f2a41e; --bad:#e5484d; --info:#4aa8ff;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,sans-serif}
+a{color:var(--info);text-decoration:none}
+button{font:inherit;cursor:pointer}
+.wrap{max-width:1280px;margin:0 auto;padding:18px 20px 60px}
+
+/* header */
+header{display:flex;align-items:center;gap:14px;padding:14px 0 16px;border-bottom:1px solid var(--line)}
+.logo{font-family:var(--mono);font-weight:700;font-size:20px;letter-spacing:.5px}
+.logo b{color:var(--acc)}
+.tag{color:var(--mut);font-size:13px}
+.spacer{flex:1}
+.badge{display:inline-flex;align-items:center;gap:7px;padding:4px 10px;border:1px solid var(--line2);border-radius:20px;font-size:12px;color:var(--mut);background:var(--panel)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--dim)}
+.dot.ok{background:var(--acc);box-shadow:0 0 8px rgba(118,185,0,.7)}
+.dot.bad{background:var(--bad)}
+.btn{background:var(--panel2);border:1px solid var(--line2);color:var(--text);border-radius:8px;padding:6px 12px;font-size:13px;transition:.15s}
+.btn:hover{border-color:var(--acc);color:#fff}
+.btn.acc{background:linear-gradient(180deg,#82ca0e,#5f9a00);border-color:#5f9a00;color:#08110a;font-weight:600}
+.btn.acc:hover{filter:brightness(1.08);color:#08110a}
+.btn.ghost{background:transparent}
+.btn.bad{border-color:#5c2326;color:#f4909b}
+.btn.bad:hover{border-color:var(--bad)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.sm{padding:3px 9px;font-size:12px;border-radius:7px}
+
+/* stats */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:18px 0}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.tile .v{font-size:26px;font-weight:700;font-family:var(--mono)}
+.tile .k{color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.8px;margin-top:2px}
+.tile.accent .v{color:var(--acc)} .tile.warn .v{color:var(--warn)}
+
+/* grid */
+.grid{display:grid;grid-template-columns:1.15fr .85fr;gap:16px;align-items:start}
+@media(max-width:980px){.grid{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}}
+section.box{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:16px}
+.box .hd{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.box .hd h2{font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--mut);font-weight:600}
+.box .bd{padding:12px 16px}
+.pill{font-size:11px;padding:2px 8px;border-radius:12px;border:1px solid var(--line2);color:var(--mut)}
+.pill.pend{color:#241a02;background:var(--warn);border-color:var(--warn);font-weight:700}
+.pill.appr{color:var(--acc);border-color:rgba(118,185,0,.45)}
+.pill.dend{color:var(--bad);border-color:rgba(229,72,77,.4)}
+
+/* sandbox cards */
+.sb{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px;background:var(--panel2)}
+.sb:last-child{margin-bottom:0}
+.sb .top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.sb .name{font-family:var(--mono);font-weight:700;font-size:15px}
+.chip{font-size:11px;padding:2px 8px;border-radius:6px;background:#0d1119;border:1px solid var(--line2);color:var(--mut);font-family:var(--mono)}
+.chip.run{color:var(--acc);border-color:rgba(118,185,0,.4)}
+.chip.stop{color:var(--mut)}
+.sb .meta{color:var(--dim);font-size:12px;margin-top:6px;font-family:var(--mono);word-break:break-all}
+.sb .actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+
+/* request cards */
+.req{border:1px solid var(--line);border-left:3px solid var(--warn);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:var(--panel2)}
+.req.approved{border-left-color:var(--acc);opacity:.8}
+.req.denied{border-left-color:var(--bad);opacity:.75}
+.req .ep{font-family:var(--mono);font-size:15px;font-weight:700;word-break:break-all}
+.req .ep small{color:var(--mut);font-weight:400}
+.req .sub{color:var(--mut);font-size:12px;margin-top:5px;font-family:var(--mono);word-break:break-all}
+.req .row{display:flex;align-items:center;gap:8px;margin-top:9px;flex-wrap:wrap}
+.req .reason{color:var(--dim);font-size:12px;margin-top:7px}
+.empty{color:var(--dim);padding:10px 2px;font-size:13px}
+
+/* audit */
+.aud{font-size:12.5px}
+.aud .e{display:grid;grid-template-columns:74px 1fr auto;gap:10px;padding:7px 0;border-bottom:1px dashed var(--line)}
+.aud .e:last-child{border-bottom:0}
+.aud .t{color:var(--dim);font-family:var(--mono)}
+.aud .act{font-family:var(--mono);color:var(--info)}
+.aud .act.ok{color:var(--acc)} .aud .act.err{color:var(--bad)}
+.aud .d{color:var(--mut)}
+.aud .d b{color:var(--text);font-weight:600}
+
+/* drawer */
+.drawer{position:fixed;left:0;right:0;bottom:0;height:44vh;background:#05070b;border-top:1px solid var(--line2);transform:translateY(105%);transition:.22s ease;z-index:40;display:flex;flex-direction:column}
+.drawer.open{transform:translateY(0)}
+.drawer .dhd{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--line);background:var(--panel)}
+.drawer .dhd .ttl{font-family:var(--mono);font-size:13px;color:var(--acc)}
+.drawer pre{flex:1;overflow:auto;padding:12px 14px;font-family:var(--mono);font-size:12px;line-height:1.55;color:#c9f29b;white-space:pre-wrap;word-break:break-all}
+.drawer pre .ln{display:block}
+
+/* modal */
+.overlay{position:fixed;inset:0;background:rgba(3,5,8,.72);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
+.overlay.open{display:flex}
+.modal{background:var(--panel);border:1px solid var(--line2);border-radius:14px;width:min(680px,100%);max-height:88vh;overflow:auto;padding:18px 18px 16px}
+.modal h3{font-size:16px;margin-bottom:4px}
+.modal .why{color:var(--mut);font-size:13px;margin-bottom:12px}
+.modal label{display:block;font-size:12px;color:var(--mut);margin:10px 0 4px;text-transform:uppercase;letter-spacing:.6px}
+.modal input[type=text],.modal textarea{width:100%;background:#0b0f16;border:1px solid var(--line2);border-radius:8px;color:var(--text);padding:9px 10px;font:inherit}
+.modal textarea{font-family:var(--mono);font-size:12px;min-height:210px;resize:vertical;white-space:pre}
+.modal .foot{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+.note{color:var(--dim);font-size:12px;margin-top:6px}
+.warnband{background:rgba(242,164,30,.08);border:1px solid rgba(242,164,30,.35);color:#f6c46a;border-radius:8px;padding:8px 10px;font-size:12.5px;margin-top:10px}
+
+/* toasts */
+#toasts{position:fixed;right:16px;top:16px;z-index:60;display:flex;flex-direction:column;gap:8px}
+.toast{background:var(--panel2);border:1px solid var(--line2);border-left:3px solid var(--acc);border-radius:10px;padding:10px 14px;font-size:13px;max-width:420px;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+.toast.err{border-left-color:var(--bad)}
+.toast.warn{border-left-color:var(--warn)}
+
+footer{margin-top:26px;color:var(--dim);font-size:12px;border-top:1px solid var(--line);padding-top:14px;display:flex;gap:16px;flex-wrap:wrap}
+footer code{font-family:var(--mono);color:var(--mut)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">nemo<b>deck</b></div>
+    <div class="tag">operator console for NemoClaw sandboxes</div>
+    <div class="spacer"></div>
+    <span class="badge" id="badge"><span class="dot" id="badgeDot"></span><span id="badgeTxt">connecting…</span></span>
+    <button class="btn sm" onclick="refreshAll(true)">Refresh</button>
+  </header>
+
+  <div class="stats">
+    <div class="tile"><div class="v" id="stSb">–</div><div class="k">Sandboxes</div></div>
+    <div class="tile"><div class="v" id="stRun">–</div><div class="k">Running</div></div>
+    <div class="tile warn"><div class="v" id="stPend">–</div><div class="k">Pending approvals</div></div>
+    <div class="tile accent"><div class="v" id="stAud">–</div><div class="k">Audit events</div></div>
+  </div>
+
+  <div class="grid">
+    <div>
+      <section class="box">
+        <div class="hd"><h2>Sandboxes</h2><div class="spacer"></div><span class="pill" id="adapterPill">–</span></div>
+        <div class="bd" id="sbList"><div class="empty">loading…</div></div>
+      </section>
+    </div>
+    <div>
+      <section class="box">
+        <div class="hd"><h2>Approvals inbox</h2><div class="spacer"></div><span class="pill pend" id="pendCount">0</span></div>
+        <div class="bd" id="reqList"><div class="empty">loading…</div></div>
+      </section>
+      <section class="box">
+        <div class="hd"><h2>Audit trail</h2></div>
+        <div class="bd aud" id="audList"><div class="empty">loading…</div></div>
+      </section>
+    </div>
+  </div>
+
+  <footer>
+    <span>approvals are session-scoped in NemoClaw — <b>re-approve means re-apply</b>. nemodeck writes each decision to an append-only audit log and promotes endpoints into durable policy docs.</span>
+    <span class="spacer"></span>
+    <span>applies via <code>nemoclaw &lt;sandbox&gt; policy add --from-file</code> · never displays secrets</span>
+  </footer>
+</div>
+
+<!-- ops drawer -->
+<div class="drawer" id="drawer">
+  <div class="dhd">
+    <span class="ttl" id="drawerTitle">logs</span>
+    <div class="spacer"></div>
+    <button class="btn sm" id="drawerStop" onclick="stopStream()">Stop</button>
+    <button class="btn sm ghost" onclick="closeDrawer()">Close</button>
+  </div>
+  <pre id="drawerOut"></pre>
+</div>
+
+<!-- modal -->
+<div class="overlay" id="overlay">
+  <div class="modal" id="modalBox"></div>
+</div>
+
+<div id="toasts"></div>
+
+<script>
+/* ============================ tiny plumbing ============================ */
+const $ = (s, el=document) => el.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const IS_SNAPSHOT = !!window.NEMODECK_SNAPSHOT;
+const TOKEN_KEY = 'nemodeck.token';
+let TOKEN = null;
+(function initToken(){
+  try{
+    const u = new URL(location.href);
+    const t = u.searchParams.get('token');
+    if (t) { TOKEN = t; try{localStorage.setItem(TOKEN_KEY,t)}catch{}; u.searchParams.delete('token'); history.replaceState(null,'',u.pathname+u.search+u.hash); }
+    else TOKEN = localStorage.getItem(TOKEN_KEY);
+  } catch(e){}
+})();
+const hdrs = extra => Object.assign({}, extra||{}, TOKEN ? {'x-nemodeck-token': TOKEN} : {});
+async function api(path, method='GET', body){
+  if (IS_SNAPSHOT) return snapApi(path, method, body);
+  const res = await fetch(path, { method, headers: hdrs(body ? {'content-type':'application/json'} : {}), body: body ? JSON.stringify(body) : undefined });
+  if (!res.ok) { let msg = 'HTTP ' + res.status; try { msg = (await res.json()).error || msg; } catch(_){} throw new Error(msg); }
+  return res.json();
+}
+const ago = ts => { if(!ts) return '—'; const s = Math.max(0, Date.now()/1000 - ts);
+  if (s < 60) return Math.round(s)+'s'; if (s < 3600) return Math.round(s/60)+'m'; if (s < 86400) return Math.round(s/3600)+'h'; return Math.round(s/86400)+'d'; };
+
+/* ============================ state ============================ */
+let S = { overview:null, requests:[], audit:[], unparsed:[] };
+let streamAbort = null;
+
+/* ============================ render ============================ */
+function renderBadge(){
+  const o = S.overview || {};
+  const dot = $('#badgeDot'), txt = $('#badgeTxt');
+  const kind = o.adapter || (IS_SNAPSHOT ? 'demo (snapshot)' : '?');
+  dot.className = 'dot ' + (o.adapter_ok === false ? 'bad' : 'ok');
+  txt.textContent = kind + (o.adapter_ok === false ? ' — ' + (o.adapter_message||'unavailable') : '');
+  $('#adapterPill').textContent = kind;
+}
+function renderStats(){
+  const c = (S.overview && S.overview.counts) || {};
+  $('#stSb').textContent = c.sandboxes ?? '–';
+  $('#stRun').textContent = c.running ?? '–';
+  $('#stPend').textContent = S.requests.filter(r=>r.state==='pending').length;
+  $('#stAud').textContent = S.audit.length;
+}
+function renderSandboxes(){
+  const el = $('#sbList'); const o = S.overview||{};
+  if (o.error) { el.innerHTML = `<div class="empty">sandboxes unavailable: ${esc(o.error)}</div>`; return; }
+  const list = o.sandboxes || [];
+  if (!list.length) { el.innerHTML = '<div class="empty">no sandboxes registered yet — <code>nemoclaw onboard</code> creates one.</div>'; return; }
+  el.innerHTML = list.map(s => `
+    <div class="sb">
+      <div class="top">
+        <span class="name">${esc(s.name)}</span>
+        <span class="chip ${s.state && s.state.startsWith('run') ? 'run':'stop'}">${esc(s.state||'?')}</span>
+        <span class="chip">${esc(s.agent||'?')}</span>
+      </div>
+      <div class="meta">${s.image ? 'image ' + esc(s.image) : ''}${s.created ? ' · created ' + esc(s.created) : ''}</div>
+      <div class="actions">
+        <button class="btn sm" onclick="opStream('${esc(s.name)}','logs',{tail:160})">Logs</button>
+        <button class="btn sm" onclick="opStream('${esc(s.name)}','doctor')">Doctor</button>
+        <button class="btn sm" onclick="snapshotPrompt('${esc(s.name)}')">Snapshot</button>
+        ${s.state && s.state.startsWith('run')
+          ? `<button class="btn sm" onclick="confirmOp('${esc(s.name)}','rebuild','rebuild recreates the sandbox and re-applies its live policy')">Rebuild</button>
+             <button class="btn sm" onclick="confirmOp('${esc(s.name)}','stop','stop the agent inside this sandbox')">Stop</button>`
+          : `<button class="btn sm acc" onclick="opStream('${esc(s.name)}','start')">Start</button>`}
+      </div>
+    </div>`).join('');
+}
+function reqCard(r){
+  const chips = [];
+  if (r.method) chips.push(`<span class="chip">${esc(r.method)} ${esc(r.path||'')}</span>`);
+  const decision = r.state==='pending' ? `
+      <div class="row">
+        <button class="btn acc" onclick="approvePrompt('${esc(r.id)}')">Approve…</button>
+        <button class="btn bad" onclick="denyPrompt('${esc(r.id)}')">Deny…</button>
+        <span class="note">approve = reviewed preset applied to the running policy</span>
+      </div>` : `
+      <div class="reason">${r.state==='approved' ? '✔ approved as <b>'+esc(r.approved_as||'preset')+'</b>' : '✕ denied — endpoint stays blocked'}${r.note ? ' · “'+esc(r.note)+'”' : ''}</div>`;
+  return `
+    <div class="req ${esc(r.state)}">
+      <div class="ep">${esc(r.host)}:${esc(r.port)} <small>· ${esc(r.sandbox)}</small></div>
+      <div class="sub">${esc(r.binary)} ${chips.join(' ')}</div>
+      <div class="sub">first seen ${ago(r.first_seen)} ago · seen ${r.count}×</div>
+      ${decision}
+    </div>`;
+}
+function renderRequests(){
+  const el = $('#reqList');
+  const pend = S.requests.filter(r=>r.state==='pending');
+  $('#pendCount').textContent = String(pend.length);
+  const conf = S.requests.filter(r=>r.state!=='pending');
+  if (!S.requests.length) { el.innerHTML = '<div class="empty">no blocked requests seen. When the sandbox agent reaches an unlisted host, it appears here.</div>'; return; }
+  el.innerHTML = pend.map(reqCard).join('') + conf.map(reqCard).join('');
+  if (S.unparsed && S.unparsed.length){
+    el.innerHTML += `<div class="warnband">${S.unparsed.length} blocked-log line(s) could not be structured — shown raw below.<br>${S.unparsed.slice(0,4).map(esc).join('<br>')}</div>`;
+  }
+}
+function renderAudit(){
+  const el = $('#audList'); const es = S.audit.slice().reverse();
+  if (!es.length) { el.innerHTML = '<div class="empty">no events yet. Decisions and ops land here.</div>'; return; }
+  el.innerHTML = es.slice(0,60).map(e => {
+    const bad = (e.result||'').startsWith('error');
+    return `<div class="e">
+      <span class="t">${esc((e.iso||'').slice(11,19))||ago(e.ts)+' ago'}</span>
+      <span class="d"><span class="act ${bad?'err':'ok'}">${esc(e.action)}</span>
+        ${e.sandbox?' · <b>'+esc(e.sandbox)+'</b>':''}${e.target?' · '+esc(e.target):''}${e.note?' · “'+esc(e.note)+'”':''}</span>
+      <span class="t">${bad?'error':'ok'}</span>
+    </div>`;
+  }).join('');
+}
+function renderAll(){ renderBadge(); renderStats(); renderSandboxes(); renderRequests(); renderAudit(); }
+
+/* ============================ data ============================ */
+async function refreshAll(showErr){
+  try{
+    const [ov, rq, au] = await Promise.all([api('/api/overview'), api('/api/requests'), api('/api/audit')]);
+    S.overview = ov; S.requests = rq.requests || []; S.unparsed = rq.unparsed || []; S.audit = au.entries || [];
+    renderAll();
+  } catch(e){ if(showErr) toast('refresh failed: '+e.message,'err'); }
+}
+
+/* ============================ ops streaming ============================ */
+function stopStream(){ if (streamAbort){ try{ streamAbort.abort(); }catch(_){} streamAbort=null; } }
+function openDrawer(title){ $('#drawerTitle').textContent = title; $('#drawerOut').innerHTML=''; $('#drawer').classList.add('open'); }
+function closeDrawer(){ stopStream(); $('#drawer').classList.remove('open'); }
+async function opStream(name, op, q={}){
+  const qs = new URLSearchParams(q).toString();
+  openDrawer(`${name} · ${op}`);
+  if (IS_SNAPSHOT) return snapStream(name, op);
+  const ctrl = new AbortController(); streamAbort = ctrl;
+  const out = $('#drawerOut');
+  try{
+    const res = await fetch(`/api/sandboxes/${encodeURIComponent(name)}/ops/${op}${qs?'?'+qs:''}`, { method:'POST', headers: hdrs(), signal: ctrl.signal });
+    const rd = res.body.getReader(); const dec = new TextDecoder(); let buf='';
+    for(;;){
+      const {value, done} = await rd.read(); if (done) break;
+      buf += dec.decode(value, {stream:true});
+      let i; while ((i = buf.indexOf('\n\n')) >= 0){
+        const chunk = buf.slice(0,i); buf = buf.slice(i+2);
+        for (const line of chunk.split('\n')) if (line.startsWith('data: ')){
+          const obj = JSON.parse(line.slice(6));
+          if (obj.line !== undefined){ const s=document.createElement('span'); s.className='ln'; s.textContent=obj.line; out.appendChild(s); out.scrollTop = out.scrollHeight; }
+          if (obj.done){ out.appendChild(Object.assign(document.createElement('span'),{className:'ln'})); }
+        }
+      }
+    }
+  }catch(e){ if (e.name!=='AbortError'){ out.appendChild(Object.assign(document.createElement('span'),{className:'ln',textContent:'[nemodeck] '+e.message})); } }
+  finally{ streamAbort = null; refreshAll(false); }
+}
+function confirmOp(name, op, why){
+  modal(`<h3>${esc(op)} <span style="color:var(--mut)">${esc(name)}</span></h3>
+    <div class="why">${esc(why)}. Output streams into the drawer.</div>
+    <div class="foot"><button class="btn ghost" onclick="closeModal()">Cancel</button>
+    <button class="btn acc" onclick="closeModal();opStream('${esc(name)}','${esc(op)}')">Run ${esc(op)}</button></div>`);
+}
+function snapshotPrompt(name){
+  modal(`<h3>snapshot <span style="color:var(--mut)">${esc(name)}</span></h3>
+    <div class="why">Creates a restore point. Credentials are stripped from snapshots by NemoClaw.</div>
+    <label>snapshot name</label><input type="text" id="snapName" value="before-change">
+    <div class="foot"><button class="btn ghost" onclick="closeModal()">Cancel</button>
+    <button class="btn acc" onclick="closeModal();opStream('${esc(name)}','snapshot_create',{snapshot_name:($('#snapName')||{}).value||'snapshot'})">Create</button></div>`);
+}
+
+/* ============================ decisions ============================ */
+async function approvePrompt(rid){
+  let yaml = '';
+  try { yaml = (await api(`/api/requests/${rid}/snippet`)).yaml; } catch(e){ toast('snippet failed: '+e.message,'err'); return; }
+  modal(`<h3>Approve blocked request</h3>
+    <div class="why">Review the scoped preset before applying. It is merged into the sandbox's running policy via <code>nemoclaw &lt;name&gt; policy add --from-file</code>.</div>
+    <label>preset YAML (editable)</label>
+    <textarea id="apYaml">${esc(yaml)}</textarea>
+    <label>reason (audited)</label>
+    <input type="text" id="apNote" placeholder="why this endpoint is safe to allow">
+    <div class="warnband">Only the exact host, port, method, path, and binary in this document get access. Widening <code>path</code> or <code>binaries</code> widens what the agent can reach.</div>
+    <div class="foot"><button class="btn ghost" onclick="closeModal()">Cancel</button>
+    <button class="btn acc" id="apGo" onclick="doApprove('${esc(rid)}')">Apply preset</button></div>`);
+}
+async function doApprove(rid){
+  const yaml = $('#apYaml').value, note = $('#apNote').value;
+  $('#apGo').disabled = true;
+  try{
+    const res = await api(`/api/requests/${rid}/approve`, 'POST', {note, yaml});
+    toast(res && res.result && res.result.ok ? 'approved — preset applied to running policy' : 'apply failed: '+((res.result||{}).output||''), res && res.result && res.result.ok ? 'ok':'err');
+    closeModal(); refreshAll(true);
+  }catch(e){ toast('approve failed: '+e.message,'err'); $('#apGo').disabled=false; }
+}
+async function denyPrompt(rid){
+  modal(`<h3>Deny request</h3>
+    <div class="why">The endpoint stays blocked. Your reason is recorded in the audit trail; if the agent retries, the request re-surfaces marked denied.</div>
+    <label>reason (audited)</label>
+    <input type="text" id="dnNote" placeholder="why this endpoint stays blocked">
+    <div class="foot"><button class="btn ghost" onclick="closeModal()">Cancel</button>
+    <button class="btn bad" onclick="doDeny('${esc(rid)}')">Deny</button></div>`);
+}
+async function doDeny(rid){
+  try{
+    await api(`/api/requests/${rid}/deny`, 'POST', {note: ($('#dnNote')||{}).value||''});
+    toast('denied — endpoint stays blocked','warn'); closeModal(); refreshAll(true);
+  }catch(e){ toast('deny failed: '+e.message,'err'); }
+}
+
+/* ============================ modal/toast ============================ */
+function modal(html){ $('#modalBox').innerHTML = html; $('#overlay').classList.add('open'); }
+function closeModal(){ $('#overlay').classList.remove('open'); }
+$('#overlay').addEventListener('click', e => { if (e.target.id==='overlay') closeModal(); });
+function toast(msg, kind='ok'){
+  const t = document.createElement('div'); t.className = 'toast '+(kind==='ok'?'':kind); t.textContent = msg;
+  $('#toasts').appendChild(t); setTimeout(()=>t.remove(), 5200);
+}
+
+/* ============================ snapshot (preview) mode ============================ */
+function snapState(){ const sn = window.NEMODECK_SNAPSHOT; return sn; }
+async function snapApi(path, method, body){
+  const sn = snapState();
+  if (path.startsWith('/api/overview')) return sn.overview;
+  if (path.startsWith('/api/requests') && path.includes('/snippet')){
+    const rid = path.split('/')[3]; const r = sn.requests.find(x=>x.id===rid);
+    return { yaml: `preset:\n  name: nemodeck-${String(r.host).replace(/[^a-z0-9]+/gi,'-').toLowerCase()}\n  description: "nemodeck approval — ${r.host}:${r.port} for ${r.sandbox}"\nnetwork_policies:\n  nemodeck-${String(r.host).replace(/[^a-z0-9]+/gi,'-').toLowerCase()}:\n    name: nemodeck-${String(r.host).replace(/[^a-z0-9]+/gi,'-').toLowerCase()}\n    endpoints:\n      - host: ${r.host}\n        port: ${r.port}\n        protocol: rest\n        enforcement: enforce\n        rules:\n          - allow: { method: ${r.method||'*'}, path: "${r.path||'/**'}" }\n    binaries:\n      - { path: ${r.binary} }\n` };
+  }
+  if (path.startsWith('/api/requests') && method==='GET') return { requests: sn.requests, unparsed: [] };
+  if (path.includes('/approve')){ const rid = path.split('/')[3]; const r = sn.requests.find(x=>x.id===rid);
+    r.state='approved'; r.approved_as='nemodeck-'+String(r.host).replace(/[^a-z0-9]+/gi,'-').toLowerCase();
+    r.note=(body&&body.note)||''; sn.audit.push({ts:Date.now()/1000, iso:new Date().toISOString(), actor:'operator', action:'approve_request', sandbox:r.sandbox, target:r.host+':'+r.port, note:r.note, result:'ok'});
+    sn.overview.counts.pending=sn.requests.filter(x=>x.state==='pending').length; sn.overview.counts.approved++;
+    return { request:r, result:{ok:true, rc:0, output:'applied custom preset to running policy (snapshot demo)'} }; }
+  if (path.includes('/deny')){ const rid = path.split('/')[3]; const r = sn.requests.find(x=>x.id===rid);
+    r.state='denied'; r.note=(body&&body.note)||''; sn.audit.push({ts:Date.now()/1000, iso:new Date().toISOString(), actor:'operator', action:'deny_request', sandbox:r.sandbox, target:r.host+':'+r.port, note:r.note, result:'ok'});
+    sn.overview.counts.pending=sn.requests.filter(x=>x.state==='pending').length; sn.overview.counts.denied++;
+    return { request:r, result:{ok:true, rc:0, output:'denied — endpoint stays blocked'} }; }
+  if (path.startsWith('/api/audit')) return { entries: sn.audit };
+  return {};
+}
+function snapStream(name, op){
+  const out = $('#drawerOut');
+  const lines = op==='logs' ? [
+    '[snapshot] 08:58:41 [hermes] dashboard listening on 0.0.0.0:18789',
+    '[snapshot] 09:01:17 [hermes] tool: web_fetch https://api.weather.gov/points',
+    '[snapshot] 09:01:18 [egress] BLOCKED host=api.weather.gov port=443 binary=/usr/local/bin/hermes method=GET path=/points',
+    '[snapshot] 09:01:18 [egress] operator notified — pending approval',
+  ] : [`[snapshot] ${op} · simulated in preview — run the real console for live output`, '[snapshot] exit 0'];
+  let i=0; const t=setInterval(()=>{ if(i>=lines.length){clearInterval(t);return;}
+    const s=document.createElement('span'); s.className='ln'; s.textContent=lines[i++]; out.appendChild(s); out.scrollTop=out.scrollHeight; }, 260);
+}
+
+/* ============================ boot ============================ */
+if (IS_SNAPSHOT){ S.overview = window.NEMODECK_SNAPSHOT.overview; S.requests = window.NEMODECK_SNAPSHOT.requests; S.audit = window.NEMODECK_SNAPSHOT.audit; renderAll(); }
+else { renderBadge(); refreshAll(true); setInterval(()=>refreshAll(false), 5000); }
+</script>
+</body>
+</html>

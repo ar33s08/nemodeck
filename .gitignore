@@ -1,0 +1,16 @@
+# v0.1 — the missing operator surface for NVIDIA NemoClaw sandboxes.
+# Approvals inbox, policy promotion, lifecycle ops, audit trail.
+
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+.DS_Store
+
+# local operator state / demo artifacts
+.nemodeck/
+artifacts/
+preview-*.html
