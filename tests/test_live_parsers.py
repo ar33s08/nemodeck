@@ -177,3 +177,17 @@ def test_real_allowed_line_not_flagged():
     )
     reqs, unparsed = parse_blocked_lines(ok, "spark-hermes")
     assert reqs == [] and unparsed == []
+
+
+def test_runtime_noise_lines_not_flagged():
+    from nemodeck.discovery import parse_blocked_lines
+
+    noise = [
+        "[gateway] 2026-10-05 15:04:45,549 WARNING hermes_state: Could not open FTS rebuild lock "
+        "/sandbox/.hermes/state.db.fts_rebuild.lock ([Errno 13] Permission denied: "
+        "'/sandbox/.hermes/state.db.fts_rebuild.lock') — proceeding with in-process serialisation only.",
+        "[gateway] 2026-10-05 15:04:54,985 WARNING gateway.platforms.api_server: API server rejected "
+        "invalid API key: remote='127.0.0.1' peer_ip='127.0.0.1' method='GET' path='/health/detailed'",
+    ]
+    reqs, unparsed = parse_blocked_lines("\n".join(noise), "spark-hermes")
+    assert reqs == [] and unparsed == []

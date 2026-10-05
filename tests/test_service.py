@@ -98,3 +98,27 @@ def test_overview_reports_counts(deck):
     assert ov["counts"]["running"] == 1
     assert ov["counts"]["pending"] >= 1
     assert ov["error"] is None
+
+
+def test_ready_state_sandbox_is_discovered(deck, monkeypatch):
+    """Live NemoClaw reports sandbox state as 'Ready' once running — discovery
+    must treat it as active (regression: it previously matched only 'run*')."""
+
+    from nemodeck.models import Sandbox
+
+    calls: list[list[str]] = []
+    orig = deck.adapter.discover_requests
+
+    def spy(sandboxes):
+        calls.append(list(sandboxes))
+        return orig(sandboxes)
+
+    monkeypatch.setattr(deck.adapter, "discover_requests", spy)
+    monkeypatch.setattr(
+        deck.adapter,
+        "list_sandboxes",
+        lambda *a, **k: [Sandbox(name="spark-hermes", state="Ready", agent="hermes")],
+    )
+    deck.refresh_requests()
+    assert calls == [["spark-hermes"]]
+    assert deck.overview()["counts"]["running"] == 1

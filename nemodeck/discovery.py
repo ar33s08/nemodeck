@@ -19,6 +19,9 @@ import re
 from .models import EgressRequest
 
 _BLOCK_RE = re.compile(r"\b(blocked|denied|rejected|not allowed|egress policy)\b", re.IGNORECASE)
+# Mixed-in runtime logs (hermes gateway etc.) can contain OS/library errors that
+# look like policy denials — "Permission denied", rejected API keys — not egress.
+_NOISE_RE = re.compile(r"(permission denied|invalid api key)", re.IGNORECASE)
 
 _HOST_PORT_RES = (
     # host=api.example.com port=443
@@ -81,6 +84,8 @@ def parse_blocked_lines(text: str, sandbox: str) -> tuple[list[EgressRequest], l
         if not line:
             continue
         if not _BLOCK_RE.search(line):
+            continue
+        if _NOISE_RE.search(line):
             continue
         hp = _extract_host_port(line)
         if not hp:

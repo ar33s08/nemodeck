@@ -33,6 +33,13 @@ def preset_name_for(host: str) -> str:
     return f"nemodeck-{slugify(host)}"
 
 
+def is_active_state(state: str) -> bool:
+    """True when a sandbox is usable. Live NemoClaw reports 'Ready' once the
+    sandbox is running, so matching only ``running*`` misses every real sandbox."""
+
+    return state.lower().startswith(("run", "ready", "start", "active"))
+
+
 class DeckError(RuntimeError):
     pass
 
@@ -76,7 +83,7 @@ class Deck:
     def refresh_requests(self) -> list[EgressRequest]:
         """Pull blocked requests from the adapter and merge with memory."""
 
-        running = [s.name for s in self.sandboxes() if s.state.startswith("run")]
+        running = [s.name for s in self.sandboxes() if is_active_state(s.state)]
         try:
             found, unparsed = self.adapter.discover_requests(running)
         except Exception as exc:
@@ -244,7 +251,7 @@ class Deck:
             "sandboxes": sandboxes,
             "counts": {
                 "sandboxes": len(sandboxes),
-                "running": sum(1 for s in sandboxes if s["state"].startswith("run")),
+                "running": sum(1 for s in sandboxes if is_active_state(s["state"])),
                 "pending": len(pending),
                 "approved": sum(1 for r in reqs if r.state == "approved"),
                 "denied": sum(1 for r in reqs if r.state == "denied"),
