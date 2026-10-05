@@ -18,7 +18,7 @@ import re
 
 from .models import EgressRequest
 
-_BLOCK_MARKERS = ("blocked", "denied", "rejected", "not allowed", "egress policy")
+_BLOCK_RE = re.compile(r"\b(blocked|denied|rejected|not allowed|egress policy)\b", re.IGNORECASE)
 
 _HOST_PORT_RES = (
     # host=api.example.com port=443
@@ -31,6 +31,8 @@ _HOST_PORT_RES = (
 
 _BINARY_RE = re.compile(r"binar(?:y|ies)=(?P<binary>/\S+)")
 _CLIENT_RE = re.compile(r"client=(?P<binary>/\S+)")
+# NemoClaw/OCSF denial lines carry the process as: /usr/bin/curl(181651) -> host:443
+_PROC_BINARY_RE = re.compile(r"(?P<binary>/[^\s()\[\]]+)\(\d+\)\s*(?:->|→)")
 _METHOD_PATH_RE = re.compile(
     r"\b(?P<method>GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b(?:\s+|\s+path=)(?P<path>/[^\s\"')]*)"
 )
@@ -78,8 +80,7 @@ def parse_blocked_lines(text: str, sandbox: str) -> tuple[list[EgressRequest], l
         line = raw_line.strip()
         if not line:
             continue
-        low = line.lower()
-        if not any(marker in low for marker in _BLOCK_MARKERS):
+        if not _BLOCK_RE.search(line):
             continue
         hp = _extract_host_port(line)
         if not hp:
@@ -88,7 +89,7 @@ def parse_blocked_lines(text: str, sandbox: str) -> tuple[list[EgressRequest], l
         host, port, url_path = hp
 
         binary = "unknown"
-        mbin = _BINARY_RE.search(line) or _CLIENT_RE.search(line)
+        mbin = _BINARY_RE.search(line) or _CLIENT_RE.search(line) or _PROC_BINARY_RE.search(line)
         if mbin:
             binary = mbin.group("binary")
 

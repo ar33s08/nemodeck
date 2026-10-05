@@ -86,7 +86,7 @@ python -m nemodeck serve --adapter live --host 0.0.0.0 --port 8787
            protocol: rest
            enforcement: enforce
            rules:
-             - allow: { method: GET, path: "/points" }
+             - allow: { method: "GET", path: "/points" }
        binaries:
          - { path: /usr/local/bin/hermes }
    ```

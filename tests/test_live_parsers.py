@@ -144,3 +144,36 @@ def test_discover_requests_uses_logs_parser():
     reqs, unparsed = adapter.discover_requests(["spark-hermes"])
     assert len(reqs) == 1 and reqs[0].host == "api.weather.gov"
     assert unparsed == []
+
+
+# -- real OCSF denial / summary lines (verbatim from spark-hermes) -----------
+
+DENIED_LOG_LINE = (
+    "[1791213444.166] [sandbox] [OCSF ] [ocsf] NET:OPEN [MED] DENIED /usr/bin/curl(181651) -> "
+    "api.weather.gov:443 [policy:- engine:opa] [reason:endpoint api.weather.gov:443 is not allowed by any policy]"
+)
+SUMMARY_LINE = (
+    "[1791213383.005] [sandbox] [INFO ] [openshell_sandbox] Flushed activity summary to gateway "
+    "denied_action_count=0 network_activity_count=1 sandbox_name=spark-hermes"
+)
+
+
+def test_real_denied_line_parses_binary():
+    from nemodeck.discovery import parse_blocked_lines
+
+    reqs, unparsed = parse_blocked_lines(DENIED_LOG_LINE + "\n" + SUMMARY_LINE + "\n", "spark-hermes")
+    assert len(reqs) == 1
+    r = reqs[0]
+    assert (r.host, r.port, r.binary) == ("api.weather.gov", 443, "/usr/bin/curl")
+    assert unparsed == [], f"unparsed noise: {unparsed}"
+
+
+def test_real_allowed_line_not_flagged():
+    from nemodeck.discovery import parse_blocked_lines
+
+    ok = (
+        "[1791213376.025] [sandbox] [OCSF ] [ocsf] HTTP:GET [INFO] ALLOWED /usr/bin/curl(165417) -> "
+        "GET http://host.openshell.internal:18300/v1/models [policy:local_inference engine:opa]"
+    )
+    reqs, unparsed = parse_blocked_lines(ok, "spark-hermes")
+    assert reqs == [] and unparsed == []

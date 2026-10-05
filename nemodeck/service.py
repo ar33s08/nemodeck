@@ -146,7 +146,7 @@ class Deck:
             "        protocol: rest\n"
             "        enforcement: enforce\n"
             "        rules:\n"
-            f"          - allow: {{ method: {method}, path: \"{path}\" }}\n"
+            f"          - allow: {{ method: \"{method}\", path: \"{path}\" }}\n"
             "    binaries:\n"
             f"      - {{ path: {binary} }}\n"
         )
